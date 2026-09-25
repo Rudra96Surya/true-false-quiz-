@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>True / False Quiz</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#292929;font-family:Arial,sans-serif;color:#f4f4f5}
+.quiz-wrap{max-width:736px;margin:0 auto;background:#292929;min-height:100vh}
+.quiz-top{padding:15px 12px 12px}
+.timer-line{height:8px;background:#454545;border-radius:8px;overflow:hidden;margin-bottom:15px}
+.timer-fill{height:100%;width:100%;background:#28a23a;border-radius:8px;transition:width 1s linear}
+.stats{display:flex;justify-content:space-between;align-items:center}
+.stat{font-size:25px;font-weight:700;color:#6d9bd8;display:flex;align-items:center;gap:7px}
+.stat small{font-size:12px;color:#aaa;font-weight:500}
+.question-area{min-height:340px;display:flex;align-items:center;justify-content:center;text-align:center;padding:35px 20px}
+.question{font-size:36px;line-height:1.3;font-weight:800;max-width:620px;word-break:break-word;text-shadow:0 1px 8px #111}
+.feedback{min-height:50px;padding:7px 14px;text-align:center;font-weight:700;font-size:19px}
+.feedback.good{color:#55df6c}.feedback.bad{color:#ff6973}.feedback.timeout{color:#ffd166}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:15px}
+.answer{height:68px;border:0;border-radius:7px;color:#fff;font-size:35px;font-weight:700;cursor:pointer}
+.answer:disabled{opacity:.6;cursor:default}
+.wrong{background:#e95c67}.right{background:#278f34}
+.answer:active:not(:disabled){transform:scale(.98)}
+.control{display:flex;justify-content:center;padding:0 15px 15px}
+.stop{border:1px solid #666;background:#3a3a3a;color:#ddd;border-radius:8px;padding:10px 22px;font-size:15px;cursor:pointer}
+.result{padding:35px 20px;text-align:center}.result h2{font-size:28px}
+.restart{border:0;background:#278f34;color:#fff;padding:13px 25px;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer}
+@media(max-width:480px){.question{font-size:29px}.question-area{min-height:300px}.stat{font-size:21px}.answer{height:62px}}
+</style>
+</head>
+<body>
+<div id="quiz-app" class="quiz-wrap">
+  <div class="quiz-top">
+    <div class="timer-line"><div id="timerFill" class="timer-fill"></div></div>
+    <div class="stats">
+      <div class="stat">⏱ <span id="timer">60</span><small>sec</small></div>
+      <div class="stat">🏆 <span id="score">0</span></div>
+    </div>
+  </div>
+
+  <div id="quiz-body">
+    <div class="question-area"><div id="question" class="question">Quiz शुरू हो रहा है...</div></div>
+    <div id="feedback" class="feedback" aria-live="polite"></div>
+    <div class="actions">
+      <button type="button" class="answer wrong" id="falseBtn">✕</button>
+      <button type="button" class="answer right" id="trueBtn">✓</button>
+    </div>
+    <div class="control"><button type="button" class="stop" id="stopBtn">Quiz बंद करें</button></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const questions = [
+    ["1 + 2 = 3", true],
+    ["5 × 5 = 20", false],
+    ["भारत की राजधानी नई दिल्ली है।", true],
+    ["12 ÷ 3 = 4", true],
+    ["पृथ्वी सूर्य की परिक्रमा करती है।", true],
+    ["15 − 7 = 9", false],
+    ["जल का रासायनिक सूत्र H₂O है।", true],
+    ["100 का आधा 60 होता है।", false],
+    ["सूर्य एक तारा है।", true],
+    ["7 × 8 = 56", true],
+    ["9 + 6 = 14", false],
+    ["भारत में 28 राज्य हैं।", true],
+    ["2³ = 8", true],
+    ["1 किलो = 100 ग्राम", false],
+    ["वायुमंडल में ऑक्सीजन पाई जाती है।", true],
+    ["25 का वर्गमूल 5 है।", true],
+    ["10% of 200 = 20", true],
+    ["त्रिभुज की तीन भुजाएँ होती हैं।", true],
+    ["50 ÷ 5 = 11", false],
+    ["सप्ताह में 7 दिन होते हैं।", true]
+  ];
+
+  const colors = ["#ff5c8a","#ffb84d","#54d6ff","#b88cff","#62e879","#ff6b6b","#f7e36b","#63a4ff"];
+  let index = 0, score = 0, time = 60, locked = false, stopped = false, interval = null;
+
+  const q = document.getElementById("question");
+  const t = document.getElementById("timer");
+  const s = document.getElementById("score");
+  const f = document.getElementById("feedback");
+  const fill = document.getElementById("timerFill");
+  const trueBtn = document.getElementById("trueBtn");
+  const falseBtn = document.getElementById("falseBtn");
+  const stopBtn = document.getElementById("stopBtn");
+
+  function render() {
+    locked = false;
+    time = 60;
+    t.textContent = "60";
+    fill.style.width = "100%";
+    fill.style.background = "#28a23a";
+    f.textContent = "";
+    f.className = "feedback";
+    q.textContent = questions[index % questions.length][0];
+    q.style.color = colors[index % colors.length];
+    trueBtn.disabled = false;
+    falseBtn.disabled = false;
+  }
+
+  function startTimer() {
+    clearInterval(interval);
+    interval = setInterval(() => {
+      if (stopped) return;
+      time--;
+      t.textContent = time;
+      fill.style.width = (time / 60 * 100) + "%";
+      if (time <= 20) fill.style.background = "#e95c67";
+      else if (time <= 40) fill.style.background = "#e9b949";
+
+      if (time <= 0) {
+        clearInterval(interval);
+        locked = true;
+        trueBtn.disabled = true;
+        falseBtn.disabled = true;
+        f.textContent = "⏰ समय समाप्त — अगला सवाल";
+        f.className = "feedback timeout";
+        setTimeout(next, 900);
+      }
+    }, 1000);
+  }
+
+  function next() {
+    if (stopped) return;
+    index++;
+    render();
+    startTimer();
+  }
+
+  function answer(value) {
+    if (locked || stopped) return;
+    locked = true;
+    clearInterval(interval);
+    trueBtn.disabled = true;
+    falseBtn.disabled = true;
+
+    const correct = questions[index % questions.length][1];
+
+    if (value === correct) {
+      score++;
+      s.textContent = score;
+      f.textContent = "🎉 बधाई हो";
+      f.className = "feedback good";
+    } else {
+      f.textContent = "❌ गलत जवाब, फिर से कोशिश करें";
+      f.className = "feedback bad";
+    }
+    setTimeout(next, 1100);
+  }
+
+  trueBtn.addEventListener("click", () => answer(true));
+  falseBtn.addEventListener("click", () => answer(false));
+
+  stopBtn.addEventListener("click", () => {
+    stopped = true;
+    clearInterval(interval);
+    document.getElementById("quiz-body").innerHTML =
+      '<div class="result"><h2>Quiz समाप्त</h2><p>आपका Score: <strong>' +
+      score +
+      '</strong></p><button type="button" class="restart" id="restart">फिर से शुरू करें</button></div>';
+
+    document.getElementById("restart").addEventListener("click", () => location.reload());
+  });
+
+  render();
+  startTimer();
+})();
+</script>
+</body>
+</html>
